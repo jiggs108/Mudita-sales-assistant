@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sales Assistant</title>
+<style>
+:root{--bg:#f6f5f2;--panel:#fff;--ink:#1d1d1b;--muted:#6b6a65;--line:#e4e2dc;--accent:#2f5d50;
+--ok:#2e7d4f;--warn:#b26b00;--bad:#b3261e;--wa:#1f8f4e;--ig:#b4367a;--em:#3b5bab}
+*{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--ink)}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+header h1{font-size:16px;margin:0 12px 0 0}
+.pill{display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border:1px solid var(--line);border-radius:99px;font-size:12px;background:#fff}
+.dot{width:8px;height:8px;border-radius:50%;background:#aaa}.dot.ok{background:var(--ok)}.dot.error{background:var(--bad)}.dot.not_configured{background:#c9c6bd}
+button,.btn{font:inherit;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer;color:var(--ink);text-decoration:none}
+button.primary,.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.danger{background:var(--bad);color:#fff;border-color:var(--bad)}button:disabled{opacity:.5;cursor:default}
+main{display:grid;grid-template-columns:300px 1fr 360px;height:calc(100vh - 54px)}
+section{overflow:auto;border-right:1px solid var(--line)}
+.lead{padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer;background:var(--panel)}
+.lead.sel{background:#eef3f0;box-shadow:inset 3px 0 0 var(--accent)}
+.lead .top{display:flex;justify-content:space-between;gap:6px}.lead .name{font-weight:600}
+.lead .last{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:4px}
+.ch{font-size:11px;padding:1px 7px;border-radius:99px;color:#fff}.ch.whatsapp{background:var(--wa)}.ch.instagram{background:var(--ig)}.ch.email{background:var(--em)}
+.st{font-size:11px;padding:1px 7px;border-radius:99px;background:#ecebe6;color:#444}
+.st.booked{background:#dff0e5;color:var(--ok)}.st.not_qualified{background:#f6e0de;color:var(--bad)}.st.review{background:#fdecc8;color:var(--warn)}
+#convo{display:flex;flex-direction:column;background:var(--bg)}
+#msgs{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:8px}
+.m{max-width:72%;padding:8px 12px;border-radius:12px;white-space:pre-wrap;background:#fff;border:1px solid var(--line)}
+.m.out{align-self:flex-end;background:#e6efe9;border-color:#cfe0d5}.m.human{background:#e8ecf7;border-color:#cdd6ee}
+.m.failed{border-color:var(--bad)}.m small{display:block;color:var(--muted);font-size:11px;margin-top:3px}
+#composer{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line);background:var(--panel)}
+#composer textarea{flex:1;resize:none;height:44px;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px}
+#side{background:var(--panel);padding:14px}
+.card{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px}
+.card h3{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.kv{display:grid;grid-template-columns:110px 1fr;gap:4px 8px;font-size:13px}.kv div:nth-child(odd){color:var(--muted)}
+.q{color:var(--muted);font-style:italic;font-size:12px}
+.chk{font-size:13px;margin:3px 0}.pass{color:var(--ok)}.fail{color:var(--bad)}
+.alert{background:#fdecc8;border:1px solid #f1d38a;color:#6b4300;padding:8px 10px;border-radius:8px;margin-bottom:10px;font-size:13px}
+.log{font-size:12px;border-top:1px dashed var(--line);padding:5px 0}.log b{font-weight:600}.log span{color:var(--muted)}
+.empty{color:var(--muted);padding:24px;text-align:center}
+dialog{width:min(760px,95vw);border:1px solid var(--line);border-radius:12px;padding:16px}
+dialog textarea{width:100%;height:60vh;font:12px/1.4 ui-monospace,Menlo,monospace;border:1px solid var(--line);border-radius:8px;padding:10px}
+@media(max-width:900px){main{grid-template-columns:1fr;height:auto}section{border-right:0}#msgs{max-height:60vh}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Sales Assistant</h1>
+  <span id="statuses"></span>
+  <span style="flex:1"></span>
+  <a class="btn" href="/oauth/google/start" id="gcal">Connect Google Calendar</a>
+  <button onclick="pollEmail()">Check email now</button>
+  <button onclick="openPolicy()">Business policy</button>
+</header>
+<main>
+  <section id="leads"><div class="empty">No inquiries yet. Send a test message on WhatsApp, Instagram or email.</div></section>
+  <section id="convo">
+    <div id="msgs"><div class="empty">Select an inquiry</div></div>
+    <div id="composer" hidden>
+      <textarea id="reply" placeholder="Reply as a human (sent through the original channel)…"></textarea>
+      <button class="primary" onclick="sendReply()">Send</button>
+    </div>
+  </section>
+  <section id="side"></section>
+</main>
+<dialog id="policyDlg">
+  <h3 style="margin-top:0">Business policy (YAML)</h3>
+  <p class="q">Qualification, routing, reps, working hours and timezone all come from here. Changes are validated before saving.</p>
+  <textarea id="policyText"></textarea>
+  <div id="policyErr" style="color:var(--bad);margin:6px 0"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end"><button onclick="policyDlg.close()">Cancel</button><button class="primary" onclick="savePolicy()">Save</button></div>
+</dialog>
+<script>
+let sel = null, lastSig = "";
+const esc = s => (s ?? "").toString().replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const t = iso => iso ? new Date(iso).toLocaleString([], {day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}) : "";
+const api = async (path, opts={}) => { const r = await fetch(path, opts); if(!r.ok) throw new Error(await r.text()); return r.headers.get("content-type")?.includes("json") ? r.json() : r.text(); };
+const post = (p, body) => api(p, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body||{})});
+const STATUS_LABEL = {new:"New", needs_info:"Needs info", not_qualified:"Not qualified", slots_offered:"Slots offered", awaiting_confirmation:"Awaiting confirmation", booked:"Booked"};
+
+async function refresh(){
+  const s = await api("/api/state");
+  document.getElementById("statuses").innerHTML = Object.entries(s.statuses).map(([k,v]) =>
+    `<span class="pill" title="${esc(v.detail)}"><span class="dot ${v.state}"></span>${k}</span>`).join(" ");
+  document.getElementById("gcal").textContent = s.calendar_connected ? "Reconnect calendar" : "Connect Google Calendar";
+  const L = document.getElementById("leads");
+  L.innerHTML = s.leads.length ? s.leads.map(l => `
+    <div class="lead ${l.id===sel?"sel":""}" onclick="select(${l.id})">
+      <div class="top"><span class="name">${esc(l.display_name || l.fields?.name?.value || l.external_id)}</span><span class="ch ${l.channel}">${l.channel}</span></div>
+      <div class="top" style="margin-top:4px"><span class="st ${l.status} ${l.needs_review?"review":""}">${l.takeover?"Human takeover":l.needs_review?"Needs review":(STATUS_LABEL[l.status]||l.status)}</span><span class="q">${t(l.last_at)}</span></div>
+      <div class="last">${esc(l.last_text)}</div>
+    </div>`).join("") : `<div class="empty">No inquiries yet. Send a test message on WhatsApp, Instagram or email.</div>`;
+  if (sel) await loadLead();
+}
+
+async function select(id){ sel = id; lastSig = ""; await refresh(); }
+
+async function loadLead(){
+  const d = await api(`/api/leads/${sel}`);
+  const sig = JSON.stringify([d.messages.length, d.actions[0]?.id, d.lead.updated_at]);
+  if (sig === lastSig) return; lastSig = sig;
+  const box = document.getElementById("msgs");
+  box.innerHTML = d.messages.map(m => `<div class="m ${m.direction} ${m.author==="human"?"human":""} ${m.status==="failed"?"failed":""}">${esc(m.text)}
+    <small>${m.author}${m.status==="failed"?" · FAILED TO SEND":""} · ${t(m.created_at)}</small></div>`).join("") || `<div class="empty">No messages</div>`;
+  box.scrollTop = box.scrollHeight;
+  document.getElementById("composer").hidden = false;
+  const l = d.lead, dec = l.decision || {}, f = l.fields || {};
+  const fieldRows = Object.entries(f).map(([k,v]) => `<div>${esc(k)}</div><div>${esc(v.value)}${v.currency?" "+esc(v.currency):""}<div class="q">“${esc(v.quote)}”</div></div>`).join("");
+  const checks = (dec.checks||[]).map(c => `<div class="chk ${c.pass===true?"pass":c.pass===false?"fail":""}">${c.pass===true?"✓":c.pass===false?"✗":"?"} ${esc(c.rule)} — ${esc(c.value)}</div>`).join("");
+  const missing = (dec.missing||[]).length ? `<div class="chk">Missing: ${esc(dec.missing.join(", "))}</div>` : "";
+  const mt = l.meeting;
+  document.getElementById("side").innerHTML = `
+    ${l.needs_review ? `<div class="alert"><b>Needs review:</b> ${esc(l.review_reason)}<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+       ${d.bookings.some(b=>["uncertain","pending"].includes(b.status)) ? `<button onclick="act('reconcile')">Reconcile booking</button>`:""}
+       <button onclick="act('resume')">Clear & resume</button></div></div>` : ""}
+    <div class="card"><h3>Control</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${l.takeover ? `<button class="primary" onclick="toggle(false)">Hand back to assistant</button>` : `<button class="danger" onclick="toggle(true)">Take over (stop automation)</button>`}
+      <button onclick="act('retry')" ${l.takeover||l.needs_review?"disabled":""}>Retry</button></div>
+      <div class="q" style="margin-top:6px">${l.takeover?"Automation is stopped. Replies you send go out through the customer's channel.":"Assistant is handling this conversation."}</div></div>
+    <div class="card"><h3>Lead</h3><div class="kv">
+      <div>Channel</div><div>${esc(d.contact.channel)} · ${esc(d.contact.external_id)}</div>
+      <div>Status</div><div>${esc(STATUS_LABEL[l.status]||l.status)}</div>
+      <div>Qualification</div><div><b>${esc((l.qualification||"—").replace("_"," "))}</b></div>
+      <div>Assigned rep</div><div>${d.rep?esc(d.rep.name):"—"}${dec.rep_reason?`<div class="q">${esc(dec.rep_reason)}</div>`:""}</div>
+      <div>Meeting</div><div>${mt?`<b>${esc(mt.when)}</b>${mt.link?` · <a href="${esc(mt.link)}" target="_blank">open</a>`:""}<div class="q">event ${esc(mt.event_id)}</div>`:"—"}</div>
+    </div></div>
+    <div class="card"><h3>Evidence</h3>${fieldRows?`<div class="kv">${fieldRows}</div>`:`<div class="q">Nothing extracted yet</div>`}
+      ${checks||missing?`<div style="margin-top:8px">${checks}${missing}</div>`:""}</div>
+    ${d.bookings.length?`<div class="card"><h3>Booking attempts</h3>${d.bookings.map(b=>`<div class="chk">${esc(b.status)} · ${t(b.slot_start)} · attempt ${b.attempt}<div class="q">${esc(b.detail)}</div></div>`).join("")}</div>`:""}
+    <div class="card"><h3>Action log</h3>${d.actions.map(a=>`<div class="log"><b>${esc(a.kind)}</b> <span>${t(a.ts)}</span><div>${esc(a.detail)}</div></div>`).join("")}</div>`;
+}
+
+async function toggle(on){ await post(`/api/leads/${sel}/takeover`, {on}); lastSig=""; refresh(); }
+async function act(name){ try{ await post(`/api/leads/${sel}/${name}`);}catch(e){alert(e.message)} lastSig=""; refresh(); }
+async function sendReply(){ const el=document.getElementById("reply"); if(!el.value.trim())return;
+  await post(`/api/leads/${sel}/reply`, {text: el.value}); el.value=""; lastSig=""; refresh(); }
+async function pollEmail(){ try{ const r = await post("/api/email/poll"); alert(`${r.new} new email(s)`);}catch(e){alert(e.message)} refresh(); }
+async function openPolicy(){ policyText.value = await api("/api/policy"); policyErr.textContent=""; policyDlg.showModal(); }
+async function savePolicy(){ try{ await api("/api/policy",{method:"PUT",body:policyText.value}); policyDlg.close(); }catch(e){ policyErr.textContent=e.message; } }
+refresh(); setInterval(()=>refresh().catch(()=>{}), 3000);
+</script>
+</body>
+</html>

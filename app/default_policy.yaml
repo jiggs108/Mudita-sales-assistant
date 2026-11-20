@@ -1,0 +1,51 @@
+# Editable business policy for a FICTIONAL analytics consultancy.
+# Everything the assistant decides (who qualifies, who is assigned, when meetings can happen)
+# comes from this file and plain code — never from the LLM.
+
+company: Northwind Analytics (fictional)
+timezone: Europe/London
+
+working_hours:
+  days: [mon, tue, wed, thu, fri]
+  start: "09:00"
+  end: "17:30"
+
+meeting:
+  title: Discovery call
+  duration_minutes: 30
+  min_notice_hours: 4      # earliest slot offered is at least this far ahead
+  days_ahead: 7            # how far ahead to look for slots
+  slots_to_offer: 3
+
+services:
+  - id: dashboards
+    name: BI dashboards & reporting
+  - id: data_engineering
+    name: Data pipelines & warehousing
+  - id: ml
+    name: Predictive analytics & machine learning
+
+qualification:
+  required_fields: [name, service, budget, timeline_months]
+  currency: GBP
+  min_budget: 5000            # below this → not qualified
+  max_timeline_months: 6      # starting later than this → not qualified
+
+reps:
+  - id: priya
+    name: Priya Nair
+    email: priya@northwind.test
+  - id: tom
+    name: Tom Fletcher
+    email: tom@northwind.test
+
+# Rules are checked top to bottom; the first rule whose conditions ALL match wins.
+routing:
+  rules:
+    - when: { min_budget: 50000 }
+      assign: priya
+      reason: Large deals (budget ≥ £50,000) go to the senior partner
+    - when: { services: [ml, data_engineering] }
+      assign: tom
+      reason: Technical engineering / ML work goes to Tom
+  default: priya
