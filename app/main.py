@@ -22,7 +22,7 @@ PUBLIC_PATHS = ("/webhooks/", "/healthz", "/oauth/google/callback", "/privacy")
 
 PRIVACY_HTML = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Privacy policy</title><style>body{font:16px/1.6 system-ui,sans-serif;max-width:720px;margin:40px auto;padding:0 16px;color:#222}</style></head>
-<body><h1>Privacy policy — Northwind Analytics sales assistant (test prototype)</h1>
+<body><h1>Privacy policy — Mudita Analytics sales assistant (fictional test business)</h1>
 <p>This is a technical prototype built for a hiring assignment. It is used only with the developer's own test accounts
 and authorised test recipients.</p>
 <h2>What we collect</h2><p>Messages you send to our WhatsApp, Instagram or email test channels, your channel identifier
