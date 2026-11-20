@@ -18,7 +18,20 @@ from .calendar_google import CalendarError, GoogleCalendar
 from .llm import GroqLLM
 
 STATIC = Path(__file__).with_name("static")
-PUBLIC_PATHS = ("/webhooks/", "/healthz", "/oauth/google/callback")
+PUBLIC_PATHS = ("/webhooks/", "/healthz", "/oauth/google/callback", "/privacy")
+
+PRIVACY_HTML = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Privacy policy</title><style>body{font:16px/1.6 system-ui,sans-serif;max-width:720px;margin:40px auto;padding:0 16px;color:#222}</style></head>
+<body><h1>Privacy policy — Northwind Analytics sales assistant (test prototype)</h1>
+<p>This is a technical prototype built for a hiring assignment. It is used only with the developer's own test accounts
+and authorised test recipients.</p>
+<h2>What we collect</h2><p>Messages you send to our WhatsApp, Instagram or email test channels, your channel identifier
+(phone number, Instagram-scoped ID or email address), and the details you share about your inquiry.</p>
+<h2>How we use it</h2><p>Only to reply to your inquiry, qualify it against our business rules and book a meeting on a
+test calendar. Message text is processed by an AI model provider (Groq) to understand your request. We do not sell or
+share your data for advertising.</p>
+<h2>Retention and deletion</h2><p>Test data is deleted when the prototype is retired. To request deletion earlier,
+email the address on our developer app listing.</p></body></html>"""
 
 
 def _init_statuses() -> None:
@@ -168,6 +181,11 @@ def index():
 @app.get("/healthz")
 def health():
     return {"ok": True}
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy():
+    return PRIVACY_HTML
 
 
 @app.get("/api/state")
