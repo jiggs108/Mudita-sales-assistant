@@ -22,7 +22,7 @@ class LLMError(Exception):
 class GroqLLM:
     def __init__(self, api_key: str | None = None, model: str | None = None, base_url: str | None = None):
         self.api_key = api_key or os.environ.get("GROQ_API_KEY", "")
-        self.model = model or os.environ.get("LLM_MODEL", "llama-3.3-70b-versatile")
+                self.model = model or os.environ.get("LLM_MODEL", "openai/gpt-oss-120b")
         self.base_url = base_url or os.environ.get("LLM_BASE_URL", "https://api.groq.com/openai/v1")
 
     def _chat(self, system: str, user: str, json_mode: bool, max_tokens: int) -> tuple[str, dict]:
@@ -34,6 +34,9 @@ class GroqLLM:
             "max_tokens": max_tokens,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
         }
+        if "gpt-oss" in self.model:
+            body["reasoning_effort"] = "low"
+            body["max_tokens"] = max_tokens * 4
         if json_mode:
             body["response_format"] = {"type": "json_object"}
         try:
