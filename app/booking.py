@@ -25,7 +25,7 @@ def idem_key(lead_id: int, slot_start: str) -> str:
 
 def event_id(key: str, attempt: int) -> str:
     # Google event ids allow [a-v0-9]; hex digits are a subset.
-    return "nw" + hashlib.sha1(f"{key}#{attempt}".encode()).hexdigest()
+    return "bk" + hashlib.sha1(f"{key}#{attempt}".encode()).hexdigest()
 
 
 def _set(key: str, **fields) -> None:
