@@ -160,8 +160,24 @@ def google_start():
     return RedirectResponse(cal.auth_url())
 
 
+@app.get("/oauth/gmail/start")
+def gmail_start():
+    if not (os.environ.get("GOOGLE_CLIENT_ID") and os.environ.get("GOOGLE_REDIRECT_URI")):
+        raise HTTPException(400, "Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and GOOGLE_REDIRECT_URI first")
+    return RedirectResponse(channels.gmail_auth_url())
+
+
 @app.get("/oauth/google/callback")
 def google_callback(code: str = "", state: str = "", error: str = ""):
+    if state.startswith("gmail."):  # same redirect URI is shared by the Gmail-sending connection
+        if error:
+            db.set_status("email", "error", f"Gmail consent failed: {error}")
+        else:
+            try:
+                channels.gmail_exchange_code(code, state)
+            except channels.ChannelError as e:
+                db.set_status("email", "error", str(e))
+        return RedirectResponse("/")
     if error:
         db.set_status("calendar", "error", f"Google consent failed: {error}")
         return RedirectResponse("/")

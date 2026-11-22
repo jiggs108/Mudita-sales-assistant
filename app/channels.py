@@ -2,10 +2,13 @@
 
 - WhatsApp: WhatsApp Cloud API (Meta) — webhook in, Graph API out.
 - Instagram: Instagram API with Instagram Login (Meta) — webhook in, graph.instagram.com out.
-- Email: IMAP polling in (works with any mailbox, e.g. Gmail + app password), SMTP out with threading headers.
+- Email: IMAP polling in (works with any mailbox, e.g. Gmail + app password).
+  Out: Gmail API over HTTPS when connected (many hosts, incl. Railway, block outbound SMTP ports),
+  otherwise SMTP. Replies carry In-Reply-To/References so they thread.
 """
 from __future__ import annotations
 
+import base64
 import email
 import email.policy
 import hashlib
@@ -13,7 +16,10 @@ import hmac
 import imaplib
 import os
 import re
+import secrets
 import smtplib
+import time
+from urllib.parse import urlencode
 from email.message import EmailMessage
 from email.utils import make_msgid, parseaddr
 
@@ -115,6 +121,82 @@ def send_instagram(to: str, text: str) -> str:
     return r.json().get("message_id", "")
 
 
+# ---- Gmail API sending (HTTPS) ---------------------------------------------
+GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.send"
+_gmail_access: tuple[str, float] | None = None
+
+
+def gmail_connected() -> bool:
+    return bool((db.get_json("gmail_tokens") or {}).get("refresh_token"))
+
+
+def gmail_auth_url() -> str:
+    state = "gmail." + secrets.token_urlsafe(16)
+    db.set_setting("gmail_oauth_state", state)
+    return "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode({
+        "client_id": env("GOOGLE_CLIENT_ID"), "redirect_uri": env("GOOGLE_REDIRECT_URI"),
+        "response_type": "code", "scope": GMAIL_SCOPE, "access_type": "offline",
+        "prompt": "consent", "state": state, "login_hint": env("EMAIL_ADDRESS")})
+
+
+def gmail_exchange_code(code: str, state: str) -> None:
+    global _gmail_access
+    if not state or state != db.get_setting("gmail_oauth_state"):
+        raise ChannelAuthError("OAuth state mismatch")
+    r = httpx.post("https://oauth2.googleapis.com/token", timeout=15, data={
+        "code": code, "client_id": env("GOOGLE_CLIENT_ID"), "client_secret": env("GOOGLE_CLIENT_SECRET"),
+        "redirect_uri": env("GOOGLE_REDIRECT_URI"), "grant_type": "authorization_code"})
+    if r.status_code != 200 or not r.json().get("refresh_token"):
+        raise ChannelAuthError(f"Gmail token exchange failed: {r.text[:200]}")
+    tok = r.json()
+    db.set_json("gmail_tokens", {"refresh_token": tok["refresh_token"]})
+    _gmail_access = (tok["access_token"], time.time() + tok.get("expires_in", 3600) - 60)
+    db.set_status("email", "ok", "Gmail sending connected")
+
+
+def _gmail_token() -> str:
+    global _gmail_access
+    if _gmail_access and _gmail_access[1] > time.time():
+        return _gmail_access[0]
+    refresh = (db.get_json("gmail_tokens") or {}).get("refresh_token")
+    try:
+        r = httpx.post("https://oauth2.googleapis.com/token", timeout=15, data={
+            "refresh_token": refresh, "client_id": env("GOOGLE_CLIENT_ID"),
+            "client_secret": env("GOOGLE_CLIENT_SECRET"), "grant_type": "refresh_token"})
+    except httpx.HTTPError as e:
+        raise ChannelError(f"Gmail token refresh network error: {e}") from e
+    if r.status_code != 200:
+        if "invalid_grant" in r.text:
+            db.set_json("gmail_tokens", {})
+            db.set_status("email", "error", "Gmail sending expired/revoked — reconnect at /oauth/gmail/start")
+            raise ChannelAuthError("Gmail connection expired or was revoked")
+        raise ChannelError(f"Gmail token refresh failed: HTTP {r.status_code}")
+    tok = r.json()
+    _gmail_access = (tok["access_token"], time.time() + tok.get("expires_in", 3600) - 60)
+    return _gmail_access[0]
+
+
+def _send_via_gmail(msg: EmailMessage) -> None:
+    global _gmail_access
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    for attempt in (1, 2):
+        try:
+            r = httpx.post("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", timeout=20,
+                           headers={"Authorization": f"Bearer {_gmail_token()}"}, json={"raw": raw})
+        except httpx.HTTPError as e:
+            raise ChannelError(f"Gmail API network error: {e}") from e
+        if r.status_code == 401 and attempt == 1:
+            _gmail_access = None
+            continue
+        if r.status_code in (401, 403):
+            db.set_status("email", "error", f"Gmail API refused send (HTTP {r.status_code}) — reconnect Gmail")
+            raise ChannelAuthError(f"Gmail API HTTP {r.status_code}: {r.text[:200]}")
+        if r.status_code != 200:
+            db.set_status("email", "error", f"Gmail API send failed: HTTP {r.status_code}")
+            raise ChannelError(f"Gmail API HTTP {r.status_code}: {r.text[:200]}")
+        return
+
+
 def send_email(to: str, subject: str, text: str, in_reply_to: str | None) -> str:
     msg = EmailMessage()
     msg["From"] = env("EMAIL_ADDRESS")
@@ -126,6 +208,10 @@ def send_email(to: str, subject: str, text: str, in_reply_to: str | None) -> str
         msg["In-Reply-To"] = in_reply_to
         msg["References"] = in_reply_to
     msg.set_content(text)
+    if gmail_connected():
+        _send_via_gmail(msg)
+        db.set_status("email", "ok", "Last send succeeded (Gmail API)")
+        return mid
     try:
         with smtplib.SMTP_SSL(env("SMTP_HOST", "smtp.gmail.com"), int(env("SMTP_PORT", "465")), timeout=20) as s:
             s.login(env("EMAIL_ADDRESS"), env("EMAIL_PASSWORD"))
